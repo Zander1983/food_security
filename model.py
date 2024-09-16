@@ -14,15 +14,23 @@ except Exception as e:
 milk_rainfall_2022['Rainfall'] = pd.to_numeric(milk_rainfall_2022['Rainfall'], errors='coerce')
 milk_rainfall_2022['Litres per cow'] = pd.to_numeric(milk_rainfall_2022['Litres per cow'], errors='coerce')
 
-# Step 3: Define the features (X) and target (y) for 2022 data
-X_train = milk_rainfall_2022[['Rainfall']]
-y_train = milk_rainfall_2022['Litres per cow']
+# Step 3: Function to train and predict for each month using only that month's historical data
+def train_and_predict_for_month(month, year_2023_rainfall):
+    # Filter data for the specific month across all years (excluding 2023)
+    month_data = milk_rainfall_2022[milk_rainfall_2022['Month'] == month]
+    X_train = month_data[['Rainfall']]
+    y_train = month_data['Litres per cow']
+    
+    # Initialize and train the XGBoost model for the specific month
+    model = xgb.XGBRegressor(objective='reg:squarederror')
+    model.fit(X_train, y_train)
+    
+    # Predict the 2023 milk yield per cow for the given month using 2023 rainfall
+    predicted_yield = model.predict([[year_2023_rainfall]])[0]
+    
+    return predicted_yield
 
-# Step 4: Initialize and train the XGBoost model using 2022 data
-model = xgb.XGBRegressor(objective='reg:squarederror')
-model.fit(X_train, y_train)
-
-# Step 5: Create a DataFrame with the actual 2023 data
+# Step 4: Create a DataFrame with the actual 2023 data
 data_2023 = pd.DataFrame({
     'Year': [2023] * 12,
     'Month': ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
@@ -31,19 +39,25 @@ data_2023 = pd.DataFrame({
     'Rainfall': [104.11, 31.28, 146.18, 70.97, 41.97, 63.37, 158.34, 115.21, 128.83, 158.07, 102.59, 149.28]
 })
 
-# Step 6: Use the 2023 rainfall data for prediction
-X_test = data_2023[['Rainfall']]
-predicted_yield_2023 = model.predict(X_test)
+# Step 5: Use the month-specific models to predict milk yield for 2023
+predicted_yield_2023 = []
+actual_yield_2023 = []
+months_2023 = data_2023['Month'].values
+rainfall_2023 = data_2023['Rainfall'].values
 
-# Step 7: Compare predicted vs actual yield for 2023
-actual_yield_2023 = data_2023['Litres per cow'].values
-months = data_2023['Month'].values
+for i, month in enumerate(months_2023):
+    actual_yield = data_2023.loc[data_2023['Month'] == month, 'Litres per cow'].values[0]
+    actual_yield_2023.append(actual_yield)
+    
+    # Predict yield for the month using only that month's historical data
+    predicted_yield = train_and_predict_for_month(month, rainfall_2023[i])
+    predicted_yield_2023.append(predicted_yield)
 
-# Step 8: Plot the predicted vs actual values for 2023
+# Step 6: Plot the predicted vs actual values for 2023
 plt.figure(figsize=(10, 6))
-plt.plot(months, actual_yield_2023, label='Actual Yield (Litres per cow)', marker='o')
-plt.plot(months, predicted_yield_2023, label='Predicted Yield (Litres per cow)', marker='x')
-plt.title('Predicted vs Actual Milk Yield per Cow for 2023')
+plt.plot(months_2023, actual_yield_2023, label='Actual Yield (Litres per cow)', marker='o')
+plt.plot(months_2023, predicted_yield_2023, label='Predicted Yield (Litres per cow)', marker='x')
+plt.title('Predicted vs Actual Milk Yield per Cow for 2023 (By Month)')
 plt.xlabel('Month')
 plt.ylabel('Litres per cow')
 plt.legend()
@@ -52,6 +66,6 @@ plt.xticks(rotation=45)
 plt.tight_layout()
 plt.show()
 
-# Step 9: Evaluate the model's performance for 2023
+# Step 7: Evaluate the model's performance for 2023
 rmse_2023 = mean_squared_error(actual_yield_2023, predicted_yield_2023, squared=False)
 print(f"RMSE for 2023 Predictions: {rmse_2023}")
